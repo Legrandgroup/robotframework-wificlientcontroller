@@ -92,12 +92,12 @@ class WifiClientController:
 	def start(self):
 		"""
 		Start Wi-Fi Client Controller
-        
+		
 		Example:
 		| Start |
 		"""
 		# Set directory owner
-		cmd = ['sudo', 'chown', '-R', 'jenkins:jenkins', str(self._wpa_supplicant_socket_path)]
+		cmd = ['sudo', 'chgrp', '-R', 'jenkins', str(self._wpa_supplicant_socket_path)]
 		subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
 		# Make wireless interface up
@@ -128,7 +128,7 @@ class WifiClientController:
 	def stop(self):
 		"""
 		Stop Wi-Fi Client Controller
-        
+		
 		Example:
 		| Stop |
 		"""
@@ -150,7 +150,7 @@ class WifiClientController:
 	def restart(self):
 		"""
 		Restart Wi-Fi Client Controller
-        
+		
 		Example:
 		| Restart |
 		"""
@@ -162,7 +162,7 @@ class WifiClientController:
 		Scan available Wi-Fi networks
 		This function returns a list of ScannedNetwork object.
 		Each member of ScannedNetwork can be got by using appropriate ScannedNetwork method
-        
+		
 		Example:
 		| Scan |
 		=>
@@ -183,7 +183,7 @@ class WifiClientController:
 		"""
 		Connect to a Wi-Fi network
 		This function the network id that is created an connected
-        
+		
 		Example:
 		| Connect | 'ssid' | 'NONE' or 'WPA' or 'WPA2' or 'WPA-WPA2' | 'key' | 
 		=>
@@ -233,7 +233,7 @@ class WifiClientController:
 	def disconnect(self, network_id):
 		"""
 		Disconnect a Wi-Fi network
-        
+		
 		Example:
 		| Disconnect | 'network_id' |
 		"""
