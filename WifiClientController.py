@@ -213,13 +213,14 @@ class WifiClientController:
 
 		return scanned_network_list
 		
-	def connect(self, ssid, encryption, key=None):
+	def connect(self, ssid, encryption, key=None, timeout = 10):
 		"""
 		Connect to a Wi-Fi network
 		This function the network id that is created an connected
+		timeout (optional) specifies the maximum time allowed (in seconds) to connect to the wireless network before failing
 		
 		Example:
-		| Connect | 'ssid' | 'NONE' or 'WPA' or 'WPA2' or 'WPA-WPA2' | 'key' | 
+		| Connect | 'ssid' | 'NONE' or 'WPA' or 'WPA2' or 'WPA-WPA2' | 'key' | 10
 		=>
 		| ${network_id}
 		"""
@@ -251,7 +252,6 @@ class WifiClientController:
 		self._wpa.request('SELECT_NETWORK %d' % int(network_id))
 		self._wpa.request('ENABLE_NETWORK %d' % int(network_id))
 
-		timeout = 10	# Connection timeout set to 10 seconds
 		while self._event_status != 'CONNECTED':
 			time.sleep(1)
 			timeout -= 1
