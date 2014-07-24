@@ -253,7 +253,7 @@ class WifiClientController:
 				raise Exception('Can\'t disconnect to network ' + str(network_id))
 			
 		self._is_connected = False
-		logger.debug('Disconnected to network %d' % int(network_id))
+		logger.debug('Disconnected from network %d' % int(network_id))
 		
 	def is_connected(self):
 		"""
