@@ -66,6 +66,7 @@ class WifiClientController:
 	ROBOT_LIBRARY_VERSION = '1.0'
 	
 	DEFAULT_WPA_SUPPLICANT_SOCKET_PATH = '/var/run/wpa_supplicant/'
+	
 	def __init__(self, wpa_supplicant_socket_path=None, ifname=None):
 		if wpa_supplicant_socket_path is None:
 			self._wpa_supplicant_socket_path = WifiClientController.DEFAULT_WPA_SUPPLICANT_SOCKET_PATH
@@ -75,17 +76,23 @@ class WifiClientController:
 		self._ifname = ifname
 		self._socket = None
 		self._wpa = None
-		self._wifi_event_listener = None
-		self._thread_quit_event = None
-		self._event_status = None
-		self._thread_disconnected_event = None
-		self._is_connected = None
+		self._wifi_event_listener_thread = None
+		self._thread_quit_event = None	# Thread event. When set, will force self._wifi_event_listener_thread (that runs self._event_listener()) to terminate
+		
+		# self._thread_keep_connection is a boolean variable, when set to True, will force self._event_listener() to watch for any unexpected Wi-Fi disconnection and set self._unexpected_disconnection=True if this happens
+		self._thread_keep_connection = False
+		self._unexpected_disconnection = False
+		
+		self._thread_disconnected_event = None	# Thread event. Will be set by self._event_listener() when a Wi-Fi disconnection event happens
+		self._thread_connected_event = None	# Thread event. Will be set by self._event_listener() when a Wi-Fi connection event happens
 		
 	def _event_listener(self):
 		"""
 		Thread that listen Wi-Fi event on socket
-		It updates self._event_status variable continuously. When a disconnection is detected while not expected, it raises an exception.
+		Handles connection and disconnection events from the socket
 		This thread quit when event self._thread_quit_event is set.
+		This thread will set self._thread_disconnected_event and self._thread_connected_event when respective Wi-Fi events happen
+		If self._thread_keep_connection is True, this thread will watch for any Wi-Fi disconnection and set self._unexpected_disconnection=True if this happens
 		"""
 
 		wpa_event = wpactrl.WPACtrl(self._socket)
@@ -96,13 +103,17 @@ class WifiClientController:
 				logger.debug(message)
 				status = re.findall(r"^<\d>CTRL-EVENT-([A-Z]+).*$", message)
 				if len(status) > 0:
-					self._event_status = status[0]
-					if self._thread_disconnected_event.isSet() and self._event_status == 'DISCONNECTED':
-						self._is_connected = False
-						logger.debug('Unexpected disconnection')
-						#BuiltIn().fail('Unexpected disconnection')
+					event_status = status[0]
+					if event_status == 'DISCONNECTED':
+						self._thread_disconnected_event.set()
+						if self._thread_keep_connection:
+							logger.debug('Unexpected disconnection')
+							self._unexpected_disconnection = True
+							#BuiltIn().fail('Unexpected disconnection')
+					elif event_status == 'CONNECTED':
+						self._thread_connected_event.set()
+					
 		self._thread_quit_event = None
-		self._event_status = None
 		wpa_event.detach()
 
 	def set_interface(self, ifname):
@@ -161,13 +172,17 @@ class WifiClientController:
 
 		self._thread_quit_event = threading.Event()
 		self._thread_disconnected_event = threading.Event()
-		self._wifi_event_listener = threading.Thread(target = self._event_listener)
-		self._wifi_event_listener.setDaemon(True)
-		self._wifi_event_listener.start()
+		self._thread_connected_event = threading.Event()
 
+		self._unexpected_disconnection = False
+		self._thread_keep_connection = False
+		
+		self._wifi_event_listener_thread = threading.Thread(target = self._event_listener)
+		self._wifi_event_listener_thread.setDaemon(True)
+		self._wifi_event_listener_thread.start()
+		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
-		self._is_connected = False
-
+		
 		logger.debug('WiFi Client Controller started on %s' % self._socket)
 	
 	def stop(self):
@@ -177,10 +192,14 @@ class WifiClientController:
 		Example:
 		| Stop |
 		"""
-		self._thread_quit_event.set()
-		self._wifi_event_listener.join()
-		self._wifi_event_listener = None
+		self._thread_quit_event.set()	# self._thread_quit_event will be automatically set to None in thread self._wifi_event_listener_thread
+		self._wifi_event_listener_thread.join()
+		self._wifi_event_listener_thread = None	# Destroy reference to thread
 		self._thread_disconnected_event = None
+		self._thread_connected_event = None
+
+		self._unexpected_disconnection = False
+		self._thread_keep_connection = False
 		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
@@ -272,63 +291,53 @@ class WifiClientController:
 		else:
 			raise Exception('Unknown encryption method ' + encryption)
 		
+		self._unexpected_disconnection = False
+		
+		self._thread_connected_event.clear()
 		self._wpa.request('SELECT_NETWORK %d' % int(network_id))
 		self._wpa.request('ENABLE_NETWORK %d' % int(network_id))
-
-		while self._event_status != 'CONNECTED':
-			time.sleep(1)
-			timeout -= 1
-			if timeout <= 0:
-				raise Exception('Can\'t connect to ssid "' + str(ssid) + '"')
-
-		self._thread_disconnected_event.set()
-		self._is_connected = True
+		
+		if not self._thread_connected_event.wait(timeout = timeout):
+			raise Exception('Can\'t connect to ssid ' + str(ssid))
+		self._thread_keep_connection = True
+		self._thread_disconnected_event.clear()
+		
 		logger.debug('Connected to ssid %s' % ssid)
 		
 		return network_id
 	
 	def disconnect(self, network_id):
 		"""
-		Disconnect a Wi-Fi network
+		Disconnect a Wi-Fi network (if unexpected disconnection happened beforehand, we will raise an exception here)
 		
 		Example:
 		| Disconnect | 'network_id' |
 		"""
-		self._wpa.request('DISABLE_NETWORK %d' % int(network_id))
+		self._thread_keep_connection = False
+		self.check_connection(raise_exceptions = True)
+		self._unexpected_disconnection = False
+		
 		self._thread_disconnected_event.clear()
-
-		timeout = 4	# Disconnection timeout set to 4 seconds
-		while self._event_status != 'DISCONNECTED':
-			time.sleep(0.5)
-			timeout -= 0.5
-			if timeout <= 0:
-				raise Exception('Can\'t disconnect from network ' + str(network_id))
-			
-		self._is_connected = False
+		self._wpa.request('DISABLE_NETWORK %d' % int(network_id))
+		
+		if not self._thread_disconnected_event.wait(4):
+			raise Exception('Can\'t disconnect from network ' + str(network_id))
+		self._thread_connected_event.clear()
+		
 		logger.debug('Disconnected from network %d' % int(network_id))
-		
-	def is_connected(self):
-		"""
-		Give connection status
-		Return True if Wi-Fi is connected, False otherwise
-		
-		Example:
-		| Is Connected |
-		=>
-		| True or False |
-		"""
-		return self._is_connected
 	
-	def check_connection(self):
+	def check_connection(self, raise_exceptions = False):
 		"""
 		Check connection status
-		Returns nothing if everything is OK and raise an exception if connection has been unexpectedly lost
+		Return False if Wi-Fi connection has been unexpectedly lost since last Connect call (and raise an exception if Wi-Fi connection has been unexpectedly lost since last Connect call)
+		Return True otherwise
 		
 		Example:
 		| Check Connection |
 		"""
-		if self._thread_disconnected_event.isSet() and self._is_connected == False:
+		if self._unexpected_disconnection and raise_exceptions:
 			raise Exception('Connection lost')
+		return not self._unexpected_disconnection
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="This program control wpa_supplicant daemon.", prog=progname)
@@ -351,12 +360,12 @@ if __name__ == "__main__":
 
 	wifiController = WifiClientController(wpa_supplicant_socket_path = args.socketdir, ifname = args.ifname)
 	wifiController.start()
-	wifiController.log_scanned_networks()
+	#wifiController.log_scanned_networks()
 	nid = wifiController.connect(ssid='mirabox', encryption='NONE')
 	time.sleep(10)
-	print wifiController.is_connected()
-	time.sleep(60)
-	wifiController.check_connection()
+	#print wifiController.check_connection()
+	#ime.sleep(10)
+	#wifiController.check_connection(True)
 	wifiController.disconnect(nid)
 	#wifiController.scan()
 	wifiController.stop()
