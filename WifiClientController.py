@@ -26,11 +26,19 @@ class ScannedNetwork:
 		self._signal_level = signal_level
 		self._flags = flags
 		self._ssid = ssid
-		
-	def __repr__(self):
-		return "bssid: " + self._bssid + "\nfrequency: " + self._frequency + "\nsignal level: " + self._signal_level + "\nflags: " + self._flags + "\nssid: " + self._ssid
 	
-	__srt__ = __repr__
+	def to_string_list(self):
+		return ['bssid: ' + self._bssid,
+		        'frequency: ' + self._frequency,
+		        'signal level: ' + self._signal_level,
+		        'flags: ' + self._flags,
+		        'ssid: "' + self._ssid + '"']
+	
+	def __repr__(self):
+		return '\n'.join(self.to_string_list())
+	
+	def __str__(self):
+		return ' '.join(self.to_string_list())
 	
 	def getBssid(self):
 		return self._bssid
@@ -210,8 +218,19 @@ class WifiClientController:
 		scanned_network_list = []
 		for net in scan:
 			scanned_network_list.append(ScannedNetwork(*net))
-
+		
 		return scanned_network_list
+		
+	def log_scanned_networks(self):
+		""" Scan available Wi-Fi networks and dump them to the logger
+		
+		Example:
+		| Log Scanned Networks |
+		"""
+		
+		network_list = self.scan()
+		for net in network_list:
+			logger.info(str(net))
 		
 	def connect(self, ssid, encryption, key=None, timeout = 10):
 		"""
@@ -328,6 +347,7 @@ if __name__ == "__main__":
 
 	wifiController = WifiClientController(wpa_supplicant_socket_path = args.socketdir, ifname = args.ifname)
 	wifiController.start()
+	wifiController.log_scanned_networks()
 	nid = wifiController.connect(ssid='mirabox', encryption='NONE')
 	time.sleep(10)
 	print wifiController.is_connected()
