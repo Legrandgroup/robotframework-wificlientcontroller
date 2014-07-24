@@ -250,7 +250,7 @@ class WifiClientController:
 			time.sleep(0.5)
 			timeout -= 0.5
 			if timeout <= 0:
-				raise Exception('Can\'t disconnect to network ' + str(network_id))
+				raise Exception('Can\'t disconnect from network ' + str(network_id))
 			
 		self._is_connected = False
 		logger.debug('Disconnected from network %d' % int(network_id))
