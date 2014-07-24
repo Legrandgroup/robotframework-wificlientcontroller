@@ -7,8 +7,6 @@ import os
 import sys
 import re
 import threading
-import time
-import argparse
 import subprocess
 
 #from robot.libraries.BuiltIn import BuiltIn	# Import BuiltIn to interact with RF
@@ -340,10 +338,13 @@ class WifiClientController:
 		return not self._unexpected_disconnection
 
 if __name__ == "__main__":
+	import argparse
+	import time
+	
 	parser = argparse.ArgumentParser(description="This program control wpa_supplicant daemon.", prog=progname)
 	parser.add_argument('-s', '--socketdir', type=str, help='path to directory where wpa_sipplicant stores sockets')
 	parser.add_argument('-i', '--ifname', type=str, help='wireless network interface to control', default='wlan0')
-
+	
 	args = parser.parse_args()
 	
 	try:
@@ -360,14 +361,14 @@ if __name__ == "__main__":
 
 	wifiController = WifiClientController(wpa_supplicant_socket_path = args.socketdir, ifname = args.ifname)
 	wifiController.start()
-	#wifiController.log_scanned_networks()
+	wifiController.log_scanned_networks()
+	print wifiController.scan()
 	nid = wifiController.connect(ssid='mirabox', encryption='NONE')
 	time.sleep(10)
-	#print wifiController.check_connection()
-	#ime.sleep(10)
-	#wifiController.check_connection(True)
+	print wifiController.check_connection()
+	time.sleep(10)
+	wifiController.check_connection(True)
 	wifiController.disconnect(nid)
-	#wifiController.scan()
 	wifiController.stop()
 else:
 	from robot.api import logger
