@@ -55,8 +55,13 @@ class WifiClientController:
 	ROBOT_LIBRARY_SCOPE = 'GLOBAL'
 	ROBOT_LIBRARY_VERSION = '1.0'
 	
-	def __init__(self, wpa_supplicant_socket_path='/var/run/wpa_supplicant/', ifname='wlan0'):
-		self._wpa_supplicant_socket_path = wpa_supplicant_socket_path
+	DEFAULT_WPA_SUPPLICANT_SOCKET_PATH = '/var/run/wpa_supplicant/'
+	def __init__(self, wpa_supplicant_socket_path=None, ifname='wlan0'):
+		if wpa_supplicant_socket_path is None:
+			self._wpa_supplicant_socket_path = WifiClientController.DEFAULT_WPA_SUPPLICANT_SOCKET_PATH
+		else:
+			self._wpa_supplicant_socket_path = wpa_supplicant_socket_path
+		
 		self._ifname = ifname
 		self._socket = None
 		self._wpa = None
@@ -276,7 +281,7 @@ class WifiClientController:
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="This program control wpa_supplicant daemon.", prog=progname)
 	parser.add_argument('-s', '--socketdir', type=str, help='path to directory where wpa_sipplicant stores sockets')
-	parser.add_argument('-i', '--ifname', type=str, help='wireless network interface to control')
+	parser.add_argument('-i', '--ifname', type=str, help='wireless network interface to control', required=True)
 
 	args = parser.parse_args()
 	
