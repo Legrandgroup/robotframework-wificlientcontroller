@@ -260,7 +260,7 @@ class WifiClientController:
 		timeout (optional) specifies the maximum time allowed (in seconds) to connect to the wireless network before failing
 		
 		Example:
-		| Connect | 'ssid' | 'NONE' or 'WPA' or 'WPA2' or 'WPA-WPA2' | 'key' | 10
+		| Connect | 'ssid' | 'NONE' or 'WPA' or 'WPA2' or 'WPA-WPA2' | 'key' | 10 |
 		=>
 		| ${network_id}
 		"""
@@ -304,15 +304,17 @@ class WifiClientController:
 		
 		return network_id
 	
-	def disconnect(self, network_id):
+	def disconnect(self, network_id, raise_exceptions = True):
 		"""
-		Disconnect a Wi-Fi network (if unexpected disconnection happened beforehand, we will raise an exception here)
+		Disconnect a Wi-Fi network
+		If raise_exceptions (optional) is ${True}, this method raise an exception here if an unexpected disconnection happened since last call to Connect
 		
 		Example:
-		| Disconnect | 'network_id' |
+		| Disconnect | 'network_id' | ${True} |
 		"""
 		self._thread_keep_connection = False
-		self.check_connection(raise_exceptions = True)
+		if raise_exceptions:
+			self.check_connection(raise_exceptions)
 		self._unexpected_disconnection = False
 		
 		self._thread_disconnected_event.clear()
@@ -327,11 +329,13 @@ class WifiClientController:
 	def check_connection(self, raise_exceptions = False):
 		"""
 		Check connection status
-		Return False if Wi-Fi connection has been unexpectedly lost since last Connect call (and raise an exception if Wi-Fi connection has been unexpectedly lost since last Connect call)
-		Return True otherwise
+		Return ${False} if Wi-Fi connection has been unexpectedly lost since last Connect call (and raise an exception if Wi-Fi connection has been unexpectedly lost since last Connect call)
+		Return ${True} otherwise
 		
 		Example:
 		| Check Connection |
+		=>
+		| ${True} |
 		"""
 		if self._unexpected_disconnection and raise_exceptions:
 			raise Exception('Connection lost')
