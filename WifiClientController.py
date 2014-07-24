@@ -18,7 +18,7 @@ progname = os.path.basename(sys.argv[0])
 
 class ScannedNetwork:
 	"""
-	This class is used to store scanned network informations
+	This class is used to store scanned network information
 	"""
 	def __init__(self, bssid, frequency, signal_level, flags, ssid):
 		self._bssid = bssid
@@ -72,7 +72,7 @@ class WifiClientController:
 			self._wpa_supplicant_socket_path = wpa_supplicant_socket_path
 		
 		self._ifname = ifname
-		self._socket = None
+		self._socket_name = None
 		self._wpa = None
 		self._wifi_event_listener_thread = None
 		self._thread_quit_event = None	# Thread event. When set, will force self._wifi_event_listener_thread (that runs self._event_listener()) to terminate
@@ -93,7 +93,7 @@ class WifiClientController:
 		If self._thread_keep_connection is True, this thread will watch for any Wi-Fi disconnection and set self._unexpected_disconnection=True if this happens
 		"""
 
-		wpa_event = wpactrl.WPACtrl(self._socket)
+		wpa_event = wpactrl.WPACtrl(self._socket_name)
 		wpa_event.attach()
 		while not self._thread_quit_event.isSet():
 			while wpa_event.pending():
@@ -122,7 +122,7 @@ class WifiClientController:
 		| Set Interface | 'wlan0' |
 		"""
 		
-		if not self._socket is None or not self._wpa is None:
+		if not self._socket_name is None or not self._wpa is None:
 		    raise Exception('Controller already started')
 		
 		self._ifname = ifname
@@ -154,19 +154,24 @@ class WifiClientController:
 		cmd = ['sudo', 'chgrp', '-R', 'jenkins', str(self._wpa_supplicant_socket_path)]
 		subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
-		# Make wireless interface up
+		# Bring wireless interface up
 		cmd = ['sudo', 'ifconfig', str(self._ifname), 'up']
 		subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
 		if self._wpa_supplicant_socket_path[-1] != '/':
-			self._socket = self._wpa_supplicant_socket_path + '/' + self._ifname
+			self._socket_name = self._wpa_supplicant_socket_path + '/' + self._ifname
 		else:
-			self._socket = self._wpa_supplicant_socket_path + self._ifname
+			self._socket_name = self._wpa_supplicant_socket_path + self._ifname
 		
-		if not os.path.exists(self._socket): # Check if the socket exists
-			raise Exception(self._socket + ' doesn\'t exists')
+		try:	# Check if the socket exists
+			os.stat(self._socket_name)
+		except OSError:
+			raise Exception('Error accessing ' + self._socket_name)
+		
+		if not os.access(self._socket_name, os.R_OK|os.W_OK):
+			raise Exception(self._socket_name + ' is not accessible to us in read/write')
 
-		self._wpa = wpactrl.WPACtrl(self._socket)
+		self._wpa = wpactrl.WPACtrl(self._socket_name)
 
 		self._thread_quit_event = threading.Event()
 		self._thread_disconnected_event = threading.Event()
@@ -181,7 +186,7 @@ class WifiClientController:
 		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
-		logger.debug('WiFi Client Controller started on %s' % self._socket)
+		logger.debug('WiFi Client Controller started on %s' % self._socket_name)
 	
 	def stop(self):
 		"""
@@ -201,7 +206,7 @@ class WifiClientController:
 		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
-		self._socket = None
+		self._socket_name = None
 		self._wpa = None
 
 		# Set directory owner
