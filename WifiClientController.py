@@ -64,6 +64,7 @@ class WifiClientController:
 	ROBOT_LIBRARY_VERSION = '1.0'
 	
 	DEFAULT_WPA_SUPPLICANT_SOCKET_PATH = '/var/run/wpa_supplicant/'
+	WPA_SUPPLICANT_GROUP_OVERRIDE = 'rftest'	# If set to something else than None, this group name will be applied to the DEFAULT_WPA_SUPPLICANT_SOCKET_PATH folder and subfolders
 	
 	def __init__(self, wpa_supplicant_socket_path=None, ifname=None):
 		if wpa_supplicant_socket_path is None:
@@ -150,9 +151,10 @@ class WifiClientController:
 		if self._ifname is None:	# self._iface may be None if it has not been provided at construction, in that case, a call to set_interface() is mandatory before calling start()
 			raise Exception('No Wi-Fi interface setup')
 		
-		# Set directory owner
-		cmd = ['sudo', 'chgrp', '-R', 'jenkins', str(self._wpa_supplicant_socket_path)]
-		subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
+		if not WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE is None:
+			# Set directory owner
+			cmd = ['sudo', 'chgrp', '-R', WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE, str(self._wpa_supplicant_socket_path)]
+			subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
 		# Bring wireless interface up
 		cmd = ['sudo', 'ifconfig', str(self._ifname), 'up']
