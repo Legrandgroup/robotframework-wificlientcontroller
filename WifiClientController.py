@@ -11,6 +11,8 @@ import time
 import argparse
 import subprocess
 
+#from robot.libraries.BuiltIn import BuiltIn	# Import BuiltIn to interact with RF
+
 sys.path.insert(0, '/opt/python-local/usr/local/lib/python2.7/dist-packages/')
 import wpactrl
 
@@ -98,6 +100,7 @@ class WifiClientController:
 					if self._thread_disconnected_event.isSet() and self._event_status == 'DISCONNECTED':
 						self._is_connected = False
 						logger.debug('Unexpected disconnection')
+						#BuiltIn().fail('Unexpected disconnection')
 		self._thread_quit_event = None
 		self._event_status = None
 		wpa_event.detach()
@@ -166,7 +169,7 @@ class WifiClientController:
 		self._is_connected = False
 
 		logger.debug('WiFi Client Controller started on %s' % self._socket)
-
+	
 	def stop(self):
 		"""
 		Stop Wi-Fi Client Controller
@@ -175,6 +178,7 @@ class WifiClientController:
 		| Stop |
 		"""
 		self._thread_quit_event.set()
+		self._wifi_event_listener.join()
 		self._wifi_event_listener = None
 		self._thread_disconnected_event = None
 		
@@ -351,7 +355,7 @@ if __name__ == "__main__":
 	nid = wifiController.connect(ssid='mirabox', encryption='NONE')
 	time.sleep(10)
 	print wifiController.is_connected()
-	time.sleep(10)
+	time.sleep(60)
 	wifiController.check_connection()
 	wifiController.disconnect(nid)
 	#wifiController.scan()
