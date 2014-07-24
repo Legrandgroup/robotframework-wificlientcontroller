@@ -56,7 +56,7 @@ class WifiClientController:
 	ROBOT_LIBRARY_VERSION = '1.0'
 	
 	DEFAULT_WPA_SUPPLICANT_SOCKET_PATH = '/var/run/wpa_supplicant/'
-	def __init__(self, wpa_supplicant_socket_path=None, ifname='wlan0'):
+	def __init__(self, wpa_supplicant_socket_path=None, ifname=None):
 		if wpa_supplicant_socket_path is None:
 			self._wpa_supplicant_socket_path = WifiClientController.DEFAULT_WPA_SUPPLICANT_SOCKET_PATH
 		else:
@@ -94,6 +94,32 @@ class WifiClientController:
 		self._event_status = None
 		wpa_event.detach()
 
+	def set_interface(self, ifname):
+		"""Set the interface on which the WifiClientController will act
+		This must be done prior to calling Start on the WifiClientController object
+		
+		Example:
+		| Set Interface | 'wlan0' |
+		"""
+		
+		if not self._socket is None or not self._wpa is None:
+		    raise Exception('Controller already started')
+		
+		self._ifname = ifname
+		
+	def get_interface(self, ifname):
+		"""Get the interface on which the WifiClientController is configured to run (it may not be started yet)
+		Will return None if no interface has been configured yet
+		
+		Example:
+		| Set Interface | 'wlan0' |
+		| Get Interface |
+		=>
+		| 'wlan0' |
+		"""
+		
+		return self._ifname
+		
 	def start(self):
 		"""
 		Start Wi-Fi Client Controller
@@ -101,6 +127,9 @@ class WifiClientController:
 		Example:
 		| Start |
 		"""
+		if self._ifname is None:	# self._iface may be None if it has not been provided at construction, in that case, a call to set_interface() is mandatory before calling start()
+			raise Exception('No Wi-Fi interface setup')
+		
 		# Set directory owner
 		cmd = ['sudo', 'chgrp', '-R', 'jenkins', str(self._wpa_supplicant_socket_path)]
 		subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
@@ -281,7 +310,7 @@ class WifiClientController:
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="This program control wpa_supplicant daemon.", prog=progname)
 	parser.add_argument('-s', '--socketdir', type=str, help='path to directory where wpa_sipplicant stores sockets')
-	parser.add_argument('-i', '--ifname', type=str, help='wireless network interface to control', required=True)
+	parser.add_argument('-i', '--ifname', type=str, help='wireless network interface to control', default='wlan0')
 
 	args = parser.parse_args()
 	
