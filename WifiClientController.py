@@ -9,6 +9,8 @@ import re
 import threading
 import subprocess
 
+import grp 
+
 #from robot.libraries.BuiltIn import BuiltIn	# Import BuiltIn to interact with RF
 
 sys.path.insert(0, '/opt/python-local/usr/local/lib/python2.7/dist-packages/')
@@ -18,7 +20,7 @@ progname = os.path.basename(sys.argv[0])
 
 class ScannedNetwork:
 	"""
-	This class is used to store scanned network information
+	This class is used to store network information
 	"""
 	def __init__(self, bssid, frequency, signal_level, flags, ssid):
 		self._bssid = bssid
@@ -85,10 +87,12 @@ class WifiClientController:
 		self._thread_disconnected_event = None	# Thread event. Will be set by self._event_listener() when a Wi-Fi disconnection event happens
 		self._thread_connected_event = None	# Thread event. Will be set by self._event_listener() when a Wi-Fi connection event happens
 		
+		self._connected_net_id = None  # The ID (from WPA supplicant) of the Wi-Fi network we are currently connected to
+		
 	def _event_listener(self):
 		"""
-		Thread that listen Wi-Fi event on socket
-		Handles connection and disconnection events from the socket
+		Thread that listens to Wi-Fi events on the WPA supplicant unix socket
+		It catches connection and disconnection events from the socket
 		This thread quit when event self._thread_quit_event is set.
 		This thread will set self._thread_disconnected_event and self._thread_connected_event when respective Wi-Fi events happen
 		If self._thread_keep_connection is True, this thread will watch for any Wi-Fi disconnection and set self._unexpected_disconnection=True if this happens
@@ -116,7 +120,8 @@ class WifiClientController:
 		wpa_event.detach()
 
 	def set_interface(self, ifname):
-		"""Set the interface on which the WifiClientController will act
+		"""
+		Set the interface on which the WifiClientController will act
 		This must be done prior to calling Start on the WifiClientController object
 		
 		Example:
@@ -129,7 +134,8 @@ class WifiClientController:
 		self._ifname = ifname
 		
 	def get_interface(self, ifname):
-		"""Get the interface on which the WifiClientController is configured to run (it may not be started yet)
+		"""
+		Get the interface on which the WifiClientController is configured to run (it may not be started yet)
 		Will return None if no interface has been configured yet
 		
 		Example:
@@ -140,10 +146,17 @@ class WifiClientController:
 		"""
 		
 		return self._ifname
-		
+	
+	def _get_group_names_for_username(self, username):
+		"""
+		Internal method that gets all group names for a given username
+		Returns a list of strings containing group names
+		"""
+		return [g.gr_name for g in grp.getgrall() if username in g.gr_mem]
+	
 	def start(self):
 		"""
-		Start Wi-Fi Client Controller
+		Start the Wi-Fi Client Controller
 		
 		Example:
 		| Start |
@@ -152,7 +165,15 @@ class WifiClientController:
 			raise Exception('No Wi-Fi interface setup')
 		
 		if not WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE is None:
-			# Set directory owner
+			import getpass
+			
+			my_username = getpass.getuser()
+			my_groups_list = self._get_group_names_for_username(my_username)	# Get the list of groups we are included in
+			
+			if my_username != 'root' and not WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE in my_groups_list:
+				logger.error('This library will probably only work if executed by root or a user in group ' + WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE)
+			
+			# Modify the group owner of the WPA supplicant socket so that we can read/write to it
 			cmd = ['sudo', 'chgrp', '-R', WifiClientController.WPA_SUPPLICANT_GROUP_OVERRIDE, str(self._wpa_supplicant_socket_path)]
 			subprocess.check_call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
@@ -186,13 +207,15 @@ class WifiClientController:
 		self._wifi_event_listener_thread.setDaemon(True)
 		self._wifi_event_listener_thread.start()
 		
+		self._connected_net_id = None
+		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
 		logger.debug('WiFi Client Controller started on %s' % self._socket_name)
 	
 	def stop(self):
 		"""
-		Stop Wi-Fi Client Controller
+		Stop the Wi-Fi Client Controller
 		
 		Example:
 		| Stop |
@@ -205,6 +228,8 @@ class WifiClientController:
 
 		self._unexpected_disconnection = False
 		self._thread_keep_connection = False
+		
+		self._connected_net_id = None
 		
 		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
@@ -309,23 +334,31 @@ class WifiClientController:
 		
 		logger.debug('Connected to ssid %s' % ssid)
 		
+		self._connected_net_id = network_id
+		
 		return network_id
 	
-	def disconnect(self, network_id, raise_exceptions = True):
+	def disconnect(self, raise_exceptions = True, network_id = None):
 		"""
 		Disconnect a Wi-Fi network
 		If raise_exceptions (optional) is ${True}, this method raise an exception here if an unexpected disconnection happened since last call to Connect
+		network_id is usually not necessary as we will disconnect from the network ID we are currently connected to
 		
 		Example:
-		| Disconnect | 'network_id' | ${True} |
+		| Disconnect |
 		"""
 		self._thread_keep_connection = False
 		if raise_exceptions:
 			self.check_connection(raise_exceptions)
 		self._unexpected_disconnection = False
 		
+		if network_id is None:  # If no network ID has been provided, disconnect from the current network
+			network_id = self._connected_net_id
+		
 		self._thread_disconnected_event.clear()
 		self._wpa.request('DISABLE_NETWORK %d' % int(network_id))
+		
+		self._connected_net_id = None
 		
 		if not self._thread_disconnected_event.wait(4):
 			raise Exception('Can\'t disconnect from network ' + str(network_id))
@@ -344,6 +377,8 @@ class WifiClientController:
 		=>
 		| ${True} |
 		"""
+		if self._connected_net_id is None:
+			logger.warn('Check Connection keyword used while not connected to any network ID')
 		if self._unexpected_disconnection and raise_exceptions:
 			raise Exception('Connection lost')
 		return not self._unexpected_disconnection
