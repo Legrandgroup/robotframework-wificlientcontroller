@@ -8,6 +8,7 @@ import sys
 import re
 import threading
 import subprocess
+import time
 
 import grp 
 
@@ -17,6 +18,27 @@ sys.path.insert(0, '/opt/python-local/usr/local/lib/python2.7/dist-packages/')
 import wpactrl
 
 progname = os.path.basename(sys.argv[0])
+
+class InterruptableThread(threading.Thread):
+	"""This function will spawn a thread and run the given function
+	using the args, kwargs and return the given default value if the
+	timeout is exceeded.
+	"""
+	def __init__(self, func, arg):
+		threading.Thread.__init__(self)
+		self.func = func
+		self.arg = arg
+		self.result = None
+		self.exc_info = (None, None, None)
+
+	def run(self):
+		try:
+			self.result = self.func(self.arg)
+		except Exception as e:
+			self.exc_info = sys.exc_info()
+
+	def suicide(self):
+		raise RuntimeError('SubThreadAborted')
 
 class ScannedNetwork:
 	"""
@@ -209,9 +231,24 @@ class WifiClientController:
 		
 		self._connected_net_id = None
 		
-		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
-		
-		logger.debug('WiFi Client Controller started on %s' % self._socket_name)
+		# Create a subtask (in a separate thread), to run the command:
+		#self._wpa.request('REMOVE_NETWORK all') # Clear all networks
+		subtask = InterruptableThread(self._wpa.request, 'REMOVE_NETWORK all')
+		subtask.start()
+		started_at = time.time()
+		subtask.join(5)
+		ended_at = time.time()
+		diff = ended_at - started_at
+		logger.debug('Remove network all request exited after ' + str(diff) + ' seconds')
+		if subtask.exc_info[0] is not None:  # If there were any exceptions
+			a,b,c = subtask.exc_info
+			raise a,b,c  # Raise exception to caller
+		if subtask.isAlive():
+			subtask.suicide()
+			logger.warning('wpa_supplicant seems not to respond')
+			raise RuntimeError('wpa_supplicant "REMOVE_NETWORK all" timed out after ' + str(diff )+ ' seconds')
+		else:
+			logger.debug('WiFi Client Controller started on '  + str(self._socket_name))
 	
 	def stop(self):
 		"""
