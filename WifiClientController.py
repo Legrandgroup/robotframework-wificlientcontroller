@@ -385,20 +385,23 @@ class WifiClientController:
 		| Disconnect |
 		"""
 		self._thread_keep_connection = False
-		if raise_exceptions:
-			self.check_connection(raise_exceptions)
+		
+		self._thread_disconnected_event.clear()
+		
+		still_connected = self.check_connection(raise_exceptions)
+		
 		self._unexpected_disconnection = False
 		
 		if network_id is None:  # If no network ID has been provided, disconnect from the current network
 			network_id = self._connected_net_id
 		
-		self._thread_disconnected_event.clear()
 		self._wpa.request('DISABLE_NETWORK %d' % int(network_id))
-		
 		self._connected_net_id = None
 		
-		if not self._thread_disconnected_event.wait(4):
-			raise Exception('Can\'t disconnect from network ' + str(network_id))
+		if still_connected:	# Only wait for a disconnection feedback if we have not been disconnected already
+			if not self._thread_disconnected_event.wait(4):
+				raise Exception('Can\'t disconnect from network ' + str(network_id))
+		
 		self._thread_connected_event.clear()
 		
 		logger.debug('Disconnected from network %d' % int(network_id))
