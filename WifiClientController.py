@@ -364,7 +364,7 @@ class WifiClientController:
 		self._wpa.request('SELECT_NETWORK %d' % int(network_id))
 		self._wpa.request('ENABLE_NETWORK %d' % int(network_id))
 		
-		if not self._thread_connected_event.wait(timeout = timeout):
+		if not self._thread_connected_event.wait(timeout = int(timeout)):
 			raise Exception('Can\'t connect to ssid ' + str(ssid))
 		self._thread_keep_connection = True
 		self._thread_disconnected_event.clear()
