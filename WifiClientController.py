@@ -1,7 +1,13 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-__author__    = 'Nicolas Gillen <nicolas.gillen@legrand.fr>'
+__author__    = 'Nicolas Gillen, Lionel Ains'
+__copyright__ = "Copyright 2015, Legrand SA"
+__license__ = "Apache-2.0"
+__version__ = "0.0.1"
+__maintainer__ = "Nicolas Gillen"
+__email__ = "nicolas.gillen@legrand.fr"
+__status__ = "Production"
 
 import os
 import sys
@@ -151,7 +157,7 @@ class WifiClientController:
 		"""
 		
 		if not self._socket_name is None or not self._wpa is None:
-		    raise Exception('Controller already started')
+		    raise Exception('WiFiClientController already started')
 		
 		self._ifname = ifname
 		
@@ -248,7 +254,7 @@ class WifiClientController:
 			logger.warning('wpa_supplicant seems not to respond')
 			raise RuntimeError('wpa_supplicant "REMOVE_NETWORK all" timed out after ' + str(diff )+ ' seconds')
 		else:
-			logger.debug('WiFi Client Controller started on '  + str(self._socket_name))
+			logger.debug('WiFiClientController started on '  + str(self._socket_name))
 	
 	def stop(self):
 		"""
@@ -277,7 +283,7 @@ class WifiClientController:
 		cmd = ['sudo', 'chown', '-R', 'root:root', str(self._wpa_supplicant_socket_path)]
 		subprocess.call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
-		logger.debug('WiFi Client Controller stopped')
+		logger.debug('WiFiClientController stopped')
 		
 	def restart(self):
 		"""
