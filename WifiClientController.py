@@ -252,7 +252,7 @@ class WifiClientController:
 		if subtask.isAlive():
 			subtask.suicide()
 			logger.warning('wpa_supplicant seems not to respond')
-			raise RuntimeError('wpa_supplicant "REMOVE_NETWORK all" timed out after ' + str(diff )+ ' seconds')
+			raise RuntimeError('wpa_supplicant "REMOVE_NETWORK all" timed out after ' + str(diff)+ ' seconds')
 		else:
 			logger.debug('WiFiClientController started on '  + str(self._socket_name))
 	
@@ -263,25 +263,31 @@ class WifiClientController:
 		Example:
 		| Stop |
 		"""
-		self._thread_quit_event.set()	# self._thread_quit_event will be automatically set to None in thread self._wifi_event_listener_thread
-		self._wifi_event_listener_thread.join()
-		self._wifi_event_listener_thread = None	# Destroy reference to thread
+		if self._thread_quit_event is not None:
+			self._thread_quit_event.set()	# self._thread_quit_event will be automatically set to None in thread self._wifi_event_listener_thread
+		
+		if self._wifi_event_listener_thread is not None:
+			self._wifi_event_listener_thread.join()
+			self._wifi_event_listener_thread = None	# Destroy reference to thread
+		
 		self._thread_disconnected_event = None
 		self._thread_connected_event = None
-
+		
 		self._unexpected_disconnection = False
 		self._thread_keep_connection = False
 		
 		self._connected_net_id = None
 		
-		self._wpa.request('REMOVE_NETWORK all') # Clear all networks
+		if self._wpa is not None:
+			self._wpa.request('REMOVE_NETWORK all') # Clear all networks
 		
 		self._socket_name = None
 		self._wpa = None
-
-		# Set directory owner
-		cmd = ['sudo', 'chown', '-R', 'root:root', str(self._wpa_supplicant_socket_path)]
-		subprocess.call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
+		
+		if self._wpa_supplicant_socket_path:
+			# Set directory owner
+			cmd = ['sudo', 'chown', '-R', 'root:root', str(self._wpa_supplicant_socket_path)]
+			subprocess.call(cmd, stdout=open(os.devnull, 'wb'), stderr=subprocess.STDOUT)
 		
 		logger.debug('WiFiClientController stopped')
 		
