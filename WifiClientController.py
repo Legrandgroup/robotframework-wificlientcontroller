@@ -354,6 +354,7 @@ class WifiClientController:
 			if key == None:
 				raise Exception('No key provided')
 			self._wpa.request('SET_NETWORK %d key_mgmt WPA-PSK' % int(network_id))
+			self._wpa.request('SET_NETWORK %d proto WPA' % int(network_id))
 			self._wpa.request('SET_NETWORK %d psk "%s"' % (int(network_id), key))
 		elif encryption == 'WPA2':
 			if key == None:
@@ -365,8 +366,10 @@ class WifiClientController:
 			if key == None:
 				raise Exception('No key provided')
 			self._wpa.request('SET_NETWORK %d key_mgmt WPA-PSK' % int(network_id))
-			self._wpa.request('SET_NETWORK %d pairwise CCMP TKIP' % int(network_id))
-			self._wpa.request('SET_NETWORK %d group CCMP TKIP' % int(network_id))
+			self._wpa.request('SET_NETWORK %d proto WPA RSN' % int(network_id))
+			self._wpa.request('SET_NETWORK %d psk "%s"' % (int(network_id), key))
+			#self._wpa.request('SET_NETWORK %d pairwise CCMP TKIP' % int(network_id))
+			#self._wpa.request('SET_NETWORK %d group CCMP TKIP' % int(network_id))
 		else:
 			raise Exception('Unknown encryption method ' + encryption)
 		
